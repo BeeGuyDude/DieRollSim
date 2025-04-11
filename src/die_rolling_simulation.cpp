@@ -9,8 +9,8 @@ using namespace std::chrono;
 // Note: frequency[0] will be unused for convenience (so face 1 maps to index 1).
 std::vector<int> roll_random_die(int times) {
 	// Step 1: Set up a random number generator (seed, random enginer, uniform distribution etc)
-	unsigned seed = 420;	//TODO: Seed with actual system entropy
-	std::mt19937 gen(seed);
+	std::random_device seed_rd;	//Not ideally random but good enough for simulation purposes
+	std::mt19937 gen(seed_rd());
 	std::uniform_int_distribution<int> dist(1, 6);	//Configure range of RNG output
 	// Step 2: Initialize frequency vector of size 7 (index 0 unused)
 	std::vector<int> freq(7);	 
@@ -67,35 +67,69 @@ int main() {
 	auto nCores = std::thread::hardware_concurrency(); // Get number of CPU cores
 	int rollsPerThread = 60'000'000 / (int)nCores;     // Divide workload per thread
 	
-	std::vector<int> freqCounter_async(7);
 	auto async_start = steady_clock::now();
+	
 	// Launch each task immediately in a new thread
-		//TODO
+	std::vector<std::future<std::vector<int>>> async_futures;
+	for (int i = 0; i < nCores; i++) {
+		auto future_vector = std::async(
+			std::launch::async,
+			roll_random_die,
+			rollsPerThread
+		);	//Run a single roll_random_die call in each thread, and run one thread per core on the system
+		async_futures.emplace_back(std::move(future_vector));
+	}
+
 	// Combine results from async futures
- 		//TODO
+	std::vector<int> async_freq(7);
+	for (auto &future : async_futures) {
+		std::vector<int> calculated_vector = future.get();
+		for (int i = 1; i <= 6; i++) async_freq[i] += calculated_vector[i];
+	}
 	auto async_end = steady_clock::now();
  	
-	std::cout << "----NOT IMPLEMENTED YET----\n";
 	std::cout << "\nMulti-threaded with std::launch::async:\n";
-	print(freqCounter_async, get_time(async_start, async_end));
+	print(async_freq, get_time(async_start, async_end));
 	
    	// -----------------------------------------------
 	// 3. MULTI-THREADED with std::launch::deferred
 	// -----------------------------------------------
-	std::vector<int> freqCounter_deferred;
 	auto deferred_start = steady_clock::now();
-		//TODO
+	
+	// Launch each task in a new thread to be deferred
+	std::vector<std::future<std::vector<int>>> deferred_futures;
+	for (int i = 0; i < nCores; i++) {
+		auto future_vector = std::async(
+			std::launch::deferred,
+			roll_random_die,
+			rollsPerThread
+		);	//Run a single roll_random_die call in each thread, and run one thread per core on the system
+		deferred_futures.emplace_back(std::move(future_vector));
+	}
+
+	// Combine results from async futures
+	std::vector<int> deferred_freq(7);
+	for (auto &future : deferred_futures) {
+		std::vector<int> calculated_vector = future.get();
+		for (int i = 1; i <= 6; i++) deferred_freq[i] += calculated_vector[i];
+	}
+
 	auto deferred_end = steady_clock::now();
 	
-	std::cout << "----NOT IMPLEMENTED YET----\n";
 	std::cout << "\nMulti-threaded with std::launch::deferred:\n";
-	print(freqCounter_deferred, get_time(deferred_start, deferred_end));
+	print(deferred_freq, get_time(deferred_start, deferred_end));
 }
 
 // -----------------------------------------------
 // Summary (Paste your actual output as comment) in the code:
 // -----------------------------------------------
 /*
+	Single-threaded version:
+	10001625 9996433 10006020 10000699 9995686 9999537 : 0.901414 seconds
 
+	Multi-threaded with std::launch::async:
+	9999455 9995644 10004544 9995346 10001198 10003813 : 0.125689 seconds
 
+	Multi-threaded with std::launch::deferred:
+	10006613 9997685 9996484 10001954 9999158 9998106 : 0.89578 seconds
 */
